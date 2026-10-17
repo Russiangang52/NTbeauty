@@ -1,1 +1,60 @@
+name: Сборка и публикация на GitHub Pages
 
+on:
+  push:
+    branches: [main, master, gh-pages]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Клонирование репозитория
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Установка зависимостей
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Сборка сайта
+        run: npm run build
+
+      - name: Подготовка dist для Pages
+        run: |
+          # SPA-страховка: любой путь отдаёт главную
+          cp dist/index.html dist/404.html
+          # отключаем обработку Jekyll (иначе файлы на "_" игнорируются)
+          touch dist/.nojekyll
+          echo "Собрано файлов:"; ls -la dist
+
+      - name: Настройка Pages
+        uses: actions/configure-pages@v5
+
+      - name: Загрузка артефакта
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Публикация
+        id: deployment
+        uses: actions/deploy-pages@v4
